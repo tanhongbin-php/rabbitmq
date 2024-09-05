@@ -1,0 +1,13 @@
+{
+  "name": "thb/rabbitmq",
+  "type": "library",
+  "license": "MIT",
+  "description": "Webman plugin thb/rabbitmq",
+  "require": {
+  },
+  "autoload": {
+    "psr-4": {
+      "Thb\\Rabbitmq\\": "src"
+    }
+  }
+}
