@@ -30,9 +30,10 @@ class Client
 
     /**
      * @param string $name
+     * @param bool $consumer 是否是消费者
      * @return RabbitmqClient
      */
-    public static function connection($name = 'default') {
+    public static function connection($name = 'default', $consumer = false) {
         if (!isset(static::$_connections[$name])) {
             $config = config('rabbitmq_queue', config('plugin.thb.rabbitmq.rabbitmq', []));
             if (!isset($config[$name])) {
@@ -43,7 +44,7 @@ class Client
             $user = $config[$name]['user'];
             $password = $config[$name]['password'];
             $vhost = $config[$name]['vhost'];
-            $client = new RabbitmqClient($host, $port, $user, $password, $vhost);
+            $client = new RabbitmqClient($host, $port, $user, $password, $vhost, $consumer);
             static::$_connections[$name] = $client;
         }
         return static::$_connections[$name];

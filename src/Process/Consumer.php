@@ -36,6 +36,8 @@ class Consumer
      */
     protected $_consumers = [];
 
+    protected $reconnectDelay = 10;
+
     /**
      * StompConsumer constructor.
      * @param string $consumer_dir
@@ -67,8 +69,8 @@ class Consumer
                         return false;
                     }
                     $this->_consumers[$queue] = $consumer;
-                    $connection = Client::connection($connection_name);
-                    $connection->consume($queue, function(AMQPMessage $message) use ($queue, $consumer) {
+                    $connection = Client::connection($connection_name, true);
+                    $connection->consumer($queue, function(AMQPMessage $message) use ($queue, $consumer) {
                         try {
                             call_user_func([$consumer, 'consume'], json_decode($message->getBody(), true), $message);
                         } catch (\Throwable $exception) {
