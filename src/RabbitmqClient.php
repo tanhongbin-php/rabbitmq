@@ -133,7 +133,9 @@ class RabbitmqClient
 
         while ($this->channel->is_consuming()) {
             $this->channel->wait();
-            pcntl_signal_dispatch();
+            if(DIRECTORY_SEPARATOR === '/'){
+                pcntl_signal_dispatch();
+            }
         }
     }
 
