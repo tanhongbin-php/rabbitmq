@@ -52,9 +52,11 @@ class Consumer
      */
     public function onWorkerStart()
     {
-        pcntl_signal(SIGINT, function(){
-            Worker::stopAll();
-        });
+        if(DIRECTORY_SEPARATOR === '/'){
+            pcntl_signal(SIGINT, function(){
+                Worker::stopAll();
+            });
+        }
         if(file_exists($this->_consumerDir)){
             $fileinfo = new \SplFileInfo($this->_consumerDir);
             $ext = $fileinfo->getExtension();
