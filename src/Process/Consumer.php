@@ -74,7 +74,7 @@ class Consumer
                     $connection = Client::connection($connection_name, true);
                     $max_attempts = $connection->max_attempts;
                     $retry_seconds = $connection->retry_seconds;
-                    $connection->consumer($queue, function(AMQPMessage $message) use ($connection, $consumer, $max_attempts, $retry_seconds) {
+                    $connection->consumer($queue, function(AMQPMessage $message) use ($connection, $queue, $consumer, $max_attempts, $retry_seconds) {
                         $package = json_decode($message->getBody(), true);
                         try {
                             call_user_func([$consumer, 'consume'], $package['data']);
@@ -87,7 +87,7 @@ class Consumer
                             }else{
                                 $package['attempts']++;
                                 $dela = $package['attempts'] * $retry_seconds;
-                                $connection->send($package['queue'], $package['data'], $dela, $package['attempts']);
+                                $connection->send($queue, $package['data'], $dela, $package['attempts']);
                             }
                         }
                         $message->ack();
