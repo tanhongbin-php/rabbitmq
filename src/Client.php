@@ -35,16 +35,11 @@ class Client
      */
     public static function connection($name = 'default', $consumer = false) {
         if (!isset(static::$_connections[$name])) {
-            $config = config('rabbitmq_queue', config('plugin.thb.rabbitmq.rabbitmq', []));
+            $config = config('plugin.thb.rabbitmq.rabbitmq', []);
             if (!isset($config[$name])) {
                 throw new \RuntimeException("rabbitmq connection $name not found");
             }
-            $host = $config[$name]['host'];
-            $port = $config[$name]['port'];
-            $user = $config[$name]['user'];
-            $password = $config[$name]['password'];
-            $vhost = $config[$name]['vhost'];
-            $client = new RabbitmqClient($host, $port, $user, $password, $vhost, $consumer);
+            $client = new RabbitmqClient($config, $name, $consumer);
             static::$_connections[$name] = $client;
         }
         return static::$_connections[$name];

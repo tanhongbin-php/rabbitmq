@@ -15,13 +15,11 @@
 namespace Thb\Rabbitmq;
 
 
-use PhpAmqpLib\Message\AMQPMessage;
-
 /**
  * Interface Consumer
  * @package Webman\RedisQueue
  */
 interface Consumer
 {
-    public function consume(array $data, AMQPMessage $message);
+    public function consume(array $data);
 }

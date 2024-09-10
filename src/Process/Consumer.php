@@ -72,17 +72,25 @@ class Consumer
                     }
                     $this->_consumers[$queue] = $consumer;
                     $connection = Client::connection($connection_name, true);
-                    $connection->consumer($queue, function(AMQPMessage $message) use ($queue, $consumer) {
+                    $max_attempts = $connection->max_attempts;
+                    $retry_seconds = $connection->retry_seconds;
+                    $connection->consumer($queue, function(AMQPMessage $message) use ($connection, $consumer, $max_attempts, $retry_seconds) {
+                        $package = json_decode($message->getBody(), true);
                         try {
-                            call_user_func([$consumer, 'consume'], json_decode($message->getBody(), true), $message);
+                            call_user_func([$consumer, 'consume'], $package['data']);
                         } catch (\Throwable $exception) {
-                            $package = [
-                                'queue' => $queue,
-                                'data' => $message->getBody(),
-                                'error' => $exception->getMessage()
-                            ];
+                            $package['error'] = $exception->getMessage();
                             call_user_func([$consumer, 'onConsumeFailure'], $exception, $package);
+                            //重试超过最大次数,放入失败队列
+                            if($max_attempts == 0 || ($max_attempts > 0 && $package['attempts'] >= $max_attempts)){
+                                $connection->send('rabbitmq_fail', $package['data']);
+                            }else{
+                                $package['attempts']++;
+                                $dela = $package['attempts'] * $retry_seconds;
+                                $connection->send($package['queue'], $package['data'], $dela, $package['attempts']);
+                            }
                         }
+                        $message->ack();
                     });
                     $connection->close();
                 }
