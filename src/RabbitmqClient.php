@@ -183,12 +183,11 @@ class RabbitmqClient
             $callback
         );
 
-        while ($this->channel->is_consuming()) {
-            $this->channel->wait();
-            if(DIRECTORY_SEPARATOR === '/'){
-                pcntl_signal_dispatch();
-            }
-        }
+        register_shutdown_function(function(){
+            $this->close();
+        });
+
+        $this->channel->consume();
     }
 
     public function close(){
