@@ -72,9 +72,7 @@ class Consumer
                     }
                     $this->_consumers[$queue] = $consumer;
                     $connection = Client::connection($connection_name, true);
-                    $max_attempts = $connection->max_attempts;
-                    $retry_seconds = $connection->retry_seconds;
-                    $connection->consumer($queue, function(AMQPMessage $message) use ($connection, $queue, $consumer, $max_attempts, $retry_seconds) {
+                    $connection->consumer($queue, function(AMQPMessage $message) use ($connection, $queue, $consumer) {
                         $package = json_decode($message->getBody(), true);
                         try {
                             call_user_func([$consumer, 'consume'], $package['data']);
@@ -82,11 +80,11 @@ class Consumer
                             $package['error'] = $exception->getMessage();
                             call_user_func([$consumer, 'onConsumeFailure'], $exception, $package);
                             //重试超过最大次数,放入失败队列
-                            if($max_attempts == 0 || ($max_attempts > 0 && $package['attempts'] >= $max_attempts)){
+                            if($package['max_attempts'] == 0 || ($package['max_attempts'] > 0 && $package['attempts'] >= $package['max_attempts'])){
                                 $connection->send('rabbitmq_fail', $package['data']);
                             }else{
                                 $package['attempts']++;
-                                $dela = $package['attempts'] * $retry_seconds;
+                                $dela = $package['attempts'] * $package['retry_seconds'];
                                 $connection->send($queue, $package['data'], $dela, $package['attempts']);
                             }
                         }

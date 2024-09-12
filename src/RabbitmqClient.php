@@ -23,8 +23,8 @@ class RabbitmqClient
     private $queueArr = [];
     private $return = false;
     private $prefix = '';
-    public $max_attempts = 0;
-    public $retry_seconds = 5;
+    private $max_attempts = 0;
+    private $retry_seconds = 5;
     public function __construct($config, $name, $consumer){
         static $timer;
         //初始化
@@ -102,7 +102,7 @@ class RabbitmqClient
                 return false;
             }
             $this->return = false;
-            Log::channel('rabbitmq_queue_error')->info($message->getRoutingKey(),[$message->getBody()]);
+            Log::channel('plugin.thb.rabbitmq.rabbitmq_queue_error')->info($message->getRoutingKey(),[$message->getBody()]);
         });
     }
 
@@ -134,7 +134,9 @@ class RabbitmqClient
             'delay'    => $delay,
             'attempts' => $attempts,
             'queue'    => $queue,
-            'data'     => $data
+            'data'     => $data,
+            'max_attempts' => $this->max_attempts,
+            'retry_seconds' => $this->retry_seconds,
         ]);
         //消息json
         $messageBody = $package_str;
@@ -188,6 +190,7 @@ class RabbitmqClient
         });
 
         $this->channel->consume();
+
     }
 
     public function close(){
