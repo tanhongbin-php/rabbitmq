@@ -88,22 +88,22 @@ class RabbitmqClient
         //第4个参数设置为true，表示让消息队列持久化
         $this->channel->exchange_declare('delayed_exchange', 'x-delayed-message', false, true, false, false, false, $args);
 
-//        $this->channel->confirm_select();//open confirm
-//        //ack callback function
-//        $this->channel->set_ack_handler(function (AMQPMessage $message){
-//            if(strpos($message->getRoutingKey(), 'heartbeat_queue_') !== false){
-//                return false;
-//            }
-//            $this->return = true;
-//        });
-//        //nack callback function
-//        $this->channel->set_nack_handler(function (AMQPMessage $message){
-//            if(strpos($message->getRoutingKey(), 'heartbeat_queue_') !== false){
-//                return false;
-//            }
-//            $this->return = false;
-//            Log::channel('plugin.thb.rabbitmq.rabbitmq_queue_error')->info($message->getRoutingKey(),[$message->getBody()]);
-//        });
+        $this->channel->confirm_select();//open confirm
+        //ack callback function
+        $this->channel->set_ack_handler(function (AMQPMessage $message){
+            if(strpos($message->getRoutingKey(), 'heartbeat_queue_') !== false){
+                return false;
+            }
+            $this->return = true;
+        });
+        //nack callback function
+        $this->channel->set_nack_handler(function (AMQPMessage $message){
+            if(strpos($message->getRoutingKey(), 'heartbeat_queue_') !== false){
+                return false;
+            }
+            $this->return = false;
+            Log::channel('plugin.thb.rabbitmq.rabbitmq_queue_error')->info($message->getRoutingKey(),[$message->getBody()]);
+        });
     }
 
     /**
