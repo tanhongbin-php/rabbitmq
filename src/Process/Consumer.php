@@ -70,14 +70,13 @@ class Consumer
                         echo "Consumer {$class} queue not exists\r\n";
                         return false;
                     }
-                    $this->_consumers[$queue] = $consumer;
                     $connection = Client::connection($connection_name, true);
                     $connection->consumer($queue, function(AMQPMessage $message) use ($connection, $queue, $consumer) {
                         $package = json_decode($message->getBody(), true);
                         try {
                             call_user_func([$consumer, 'consume'], $package['data']);
                         } catch (\Throwable $exception) {
-                            $package['error'] = $exception->getMessage();
+                            $package['error'] = ['errMessage'=>$exception->getMessage(),'errCode'=>$exception->getCode(),'errFile'=>$exception->getFile(),'errLine'=>$exception->getLine()];
                             call_user_func([$consumer, 'onConsumeFailure'], $exception, $package);
                             //重试超过最大次数,放入失败队列
                             if($package['max_attempts'] == 0 || ($package['max_attempts'] > 0 && $package['attempts'] >= $package['max_attempts'])){
