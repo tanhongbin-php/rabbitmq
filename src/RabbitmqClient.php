@@ -188,11 +188,7 @@ class RabbitmqClient
         register_shutdown_function(function(){
             $this->close();
         });
-
-        if(DIRECTORY_SEPARATOR === '/'){
-            pcntl_signal_dispatch();
-        }
-
+        
         $this->channel->consume();
     }
 
