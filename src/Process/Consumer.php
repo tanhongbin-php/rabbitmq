@@ -18,6 +18,7 @@ namespace Thb\Rabbitmq\Process;
 use PhpAmqpLib\Message\AMQPMessage;
 use support\Container;
 use Thb\Rabbitmq\Client;
+use Webman\Event\Event;
 use Workerman\Worker;
 
 /**
@@ -74,9 +75,12 @@ class Consumer
                     $connection->consumer($queue, function(AMQPMessage $message) use ($connection, $queue, $consumer) {
                         $package = json_decode($message->getBody(), true);
                         try {
+                            Event::emit('queue.dbListen', $package);
                             call_user_func([$consumer, 'consume'], $package['data']);
+                            Event::emit('queue.log', ['type' => 'rabbitmq']);
                         } catch (\Throwable $exception) {
                             $package['error'] = ['errMessage'=>$exception->getMessage(),'errCode'=>$exception->getCode(),'errFile'=>$exception->getFile(),'errLine'=>$exception->getLine()];
+                            $package['type'] = 'rabbitmq';
                             call_user_func([$consumer, 'onConsumeFailure'], $exception, $package);
                             //重试超过最大次数,放入失败队列
                             if($package['max_attempts'] == 0 || ($package['max_attempts'] > 0 && $package['attempts'] >= $package['max_attempts'])){

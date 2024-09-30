@@ -37,17 +37,20 @@ class RabbitmqClient
         $this->retry_seconds = $config[$name]['options']['retry_seconds'] ?? 5;
         //生产者长连接实现
         if (!$consumer && Worker::getAllWorkers() && !$timer) {
-            $timer = Timer::add(mt_rand(50,55), function () use($config, $name){
+            $timer = Timer::add(mt_rand(50,55), function ($config, $name){
                 try{
-                    // 创建一个空的消息作为心跳
-                    $heartbeatMessage = new AMQPMessage('');
+                    static $heartbeatMessage;
+                    if(!$heartbeatMessage){
+                        // 创建一个空的消息作为心跳
+                        $heartbeatMessage = new AMQPMessage('');
+                    }
                     // 发布消息到队列
                     $this->channel->basic_publish($heartbeatMessage, '', 'heartbeat_queue_' . (DIRECTORY_SEPARATOR === '/' ? posix_getpid() : ''));
                 }catch (\Throwable $exception){
                     $this->connect($config, $name);
                     //Timer::del($timer);
                 }
-            });
+            }, [$config, $name]);
         }
     }
 
