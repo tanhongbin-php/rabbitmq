@@ -37,7 +37,7 @@ class RabbitmqClient
         $this->retry_seconds = $config[$name]['options']['retry_seconds'] ?? 5;
         //生产者长连接实现
         if (!$consumer && Worker::getAllWorkers() && !$timer) {
-            $timer = Timer::add(mt_rand(50,55), function ($config, $name){
+            $timer = Timer::add(mt_rand(5,6), function ($config, $name){
                 try{
                     static $heartbeatMessage;
                     if(!$heartbeatMessage){

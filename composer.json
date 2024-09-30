@@ -4,6 +4,7 @@
   "license": "MIT",
   "description": "Webman plugin thb/rabbitmq",
   "require": {
+    "php": ">=7.2",
     "php-amqplib/php-amqplib": "^3.7",
     "webman/event": "^1.0"
   },
