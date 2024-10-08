@@ -18,14 +18,14 @@ use support\Log;
 
 class RabbitmqClient
 {
-    private $connection;
-    private $channel;
-    private $queueArr = [];
-    private $return = false;
-    private $prefix = '';
-    private $max_attempts = 0;
-    private $retry_seconds = 5;
-    public function __construct($config, $name, $consumer){
+    public $connection;
+    public $channel;
+    public $queueArr = [];
+    public $return = false;
+    public $prefix = '';
+    public $max_attempts = 0;
+    public $retry_seconds = 5;
+    public function __construct($config, $name){
         static $timer;
         //初始化
         $this->connect($config, $name);
@@ -35,23 +35,6 @@ class RabbitmqClient
         $this->max_attempts = $config[$name]['options']['max_attempts'] ?? 0;
         //重试间隔
         $this->retry_seconds = $config[$name]['options']['retry_seconds'] ?? 5;
-        //生产者长连接实现
-        if (!$consumer && Worker::getAllWorkers() && !$timer) {
-            $timer = Timer::add(mt_rand(5,6), function ($config, $name){
-                try{
-                    static $heartbeatMessage;
-                    if(!$heartbeatMessage){
-                        // 创建一个空的消息作为心跳
-                        $heartbeatMessage = new AMQPMessage('');
-                    }
-                    // 发布消息到队列
-                    $this->channel->basic_publish($heartbeatMessage, '', 'heartbeat_queue_' . (DIRECTORY_SEPARATOR === '/' ? posix_getpid() : ''));
-                }catch (\Throwable $exception){
-                    $this->connect($config, $name);
-                    //Timer::del($timer);
-                }
-            }, [$config, $name]);
-        }
     }
 
     /**
@@ -118,7 +101,7 @@ class RabbitmqClient
      * @Datetime: 2024/09/04
      * @Username: thb
      */
-    public function send(string $queue = '', array $data = [], int $delay = 0, $attempts = 0) : bool
+    public function sendAsyn(string $queue = '', array $data = [], int $delay = 0, $attempts = 0) : bool
     {
         $queue = $this->prefix . $queue;
         if(!isset($this->queueArr[$queue])){
