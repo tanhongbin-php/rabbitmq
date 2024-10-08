@@ -17,6 +17,8 @@ namespace Thb\Rabbitmq\Process;
 
 use PhpAmqpLib\Message\AMQPMessage;
 use support\Container;
+use support\exception\BusinessException;
+use support\Log;
 use Thb\Rabbitmq\Client;
 use Webman\Event\Event;
 use Workerman\Worker;
@@ -76,17 +78,30 @@ class Consumer
                         Event::emit('queue.dbListen', $package);
                         call_user_func([$consumer, 'consume'], $package['data']);
                         Event::emit('queue.log', ['type' => 'rabbitmq']);
+                    } catch (BusinessException $e) {
+                        $package['error'] = ['errMessage'=>$exception->getMessage(),'errCode'=>$exception->getCode()];
+                        $package['type'] = 'rabbitmq';
+                        try {
+                            \call_user_func([$consumer, 'onConsumeFailure'], $exception, $package);
+                        } catch (\Throwable $ta) {
+                            Log::channel('plugin.thb.rabbitmq.default')->info((string)$ta);
+                        }
+                        call_user_func([$consumer, 'onConsumeFailure'], $exception, $package);
                     } catch (\Throwable $exception) {
                         $package['error'] = ['errMessage'=>$exception->getMessage(),'errCode'=>$exception->getCode(),'errFile'=>$exception->getFile(),'errLine'=>$exception->getLine()];
                         $package['type'] = 'rabbitmq';
-                        call_user_func([$consumer, 'onConsumeFailure'], $exception, $package);
+                        try {
+                            \call_user_func([$consumer, 'onConsumeFailure'], $exception, $package);
+                        } catch (\Throwable $ta) {
+                            Log::channel('plugin.thb.rabbitmq.default')->info((string)$ta);
+                        }
                         //重试超过最大次数,放入失败队列
                         if($package['max_attempts'] == 0 || ($package['max_attempts'] > 0 && $package['attempts'] >= $package['max_attempts'])){
-                            $connection->send('rabbitmq_fail', $package['data']);
+                            $connection->sendAsyn('rabbitmq_fail', $package);
                         }else{
                             $package['attempts']++;
                             $dela = $package['attempts'] * $package['retry_seconds'];
-                            $connection->send($queue, $package['data'], $dela, $package['attempts']);
+                            $connection->sendAsyn($queue, $package['data'], $dela, $package['attempts']);
                         }
                     }
                     $message->ack();

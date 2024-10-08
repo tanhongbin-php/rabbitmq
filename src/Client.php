@@ -59,10 +59,9 @@ class Client
      * @Datetime: 2024/09/04
      * @Username: thb
      */
-    public static function send(string $queue = '', array $data = [], int $delay = 0, $attempts = 0) : bool
+    public static function send(string $queue = '', array $data = [], int $delay = 0, string $name = 'default') : bool
     {
         $config = config('plugin.thb.rabbitmq.rabbitmq', []);
-        $name = 'default';
         $consumer = true;
         $client = new RabbitmqClient($config, $name, $consumer);
 
@@ -118,11 +117,9 @@ class Client
         try {
             return static::connection('default')->{$name}(... $arguments);
         } catch (\PhpAmqpLib\Exception\AMQPConnectionClosedException $exception) {
+//            var_dump($exception->getMessage());
+//            var_dump($exception->getCode());
             //连接超时
-            $config = config('plugin.thb.rabbitmq.rabbitmq', []);
-            if (!isset($config[static::$_name])) {
-                throw new \RuntimeException("rabbitmq connection " . static::$_name . " not found");
-            }
             $client = new RabbitmqClient($config, static::$_name);
             static::$_connections[static::$_name] = $client;
             return $client->{$name}(... $arguments);
