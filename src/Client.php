@@ -117,9 +117,8 @@ class Client
         try {
             return static::connection('default')->{$name}(... $arguments);
         } catch (\PhpAmqpLib\Exception\AMQPConnectionClosedException $exception) {
-//            var_dump($exception->getMessage());
-//            var_dump($exception->getCode());
             //连接超时
+            $config = config('plugin.thb.rabbitmq.rabbitmq', []);
             $client = new RabbitmqClient($config, static::$_name);
             static::$_connections[static::$_name] = $client;
             return $client->{$name}(... $arguments);

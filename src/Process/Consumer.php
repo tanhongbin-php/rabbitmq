@@ -82,7 +82,7 @@ class Consumer
                         $package['error'] = ['errMessage'=>$exception->getMessage(),'errCode'=>$exception->getCode()];
                         $package['type'] = 'rabbitmq';
                         try {
-                            \call_user_func([$consumer, 'onConsumeFailure'], $exception, $package);
+                            Event::emit('queue.exCep', $package);
                         } catch (\Throwable $ta) {
                             Log::channel('plugin.thb.rabbitmq.default')->info((string)$ta);
                         }
@@ -91,7 +91,7 @@ class Consumer
                         $package['error'] = ['errMessage'=>$exception->getMessage(),'errCode'=>$exception->getCode(),'errFile'=>$exception->getFile(),'errLine'=>$exception->getLine()];
                         $package['type'] = 'rabbitmq';
                         try {
-                            \call_user_func([$consumer, 'onConsumeFailure'], $exception, $package);
+                            Event::emit('queue.exCep', $package);
                         } catch (\Throwable $ta) {
                             Log::channel('plugin.thb.rabbitmq.default')->info((string)$ta);
                         }
