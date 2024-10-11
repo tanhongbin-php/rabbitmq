@@ -74,19 +74,16 @@ class Consumer
                 $connection = Client::connection($connection_name);
                 $connection->consumer($queue, function(AMQPMessage $message) use ($connection, $queue, $consumer) {
                     $package = json_decode($message->getBody(), true);
+                    Event::emit('queue.dbListen', $package);
                     try {
-                        Event::emit('queue.dbListen', $package);
-                        call_user_func([$consumer, 'consume'], $package['data']);
-                        Event::emit('queue.log', ['type' => 'rabbitmq']);
+                        $res = \call_user_func([$consumer, 'consume'], $package['data']);
+                        Event::emit('queue.log', ['type' => 'rabbitmq','queue_return' => $res]);
                     } catch (BusinessException $e) {
-                        $package['error'] = ['errMessage'=>$exception->getMessage(),'errCode'=>$exception->getCode()];
-                        $package['type'] = 'rabbitmq';
                         try {
-                            Event::emit('queue.exCep', $package);
+                            Event::emit('queue.log', ['type' => 'rabbitmq','queue_return' => ['code'=>$exception->getCode(),'msg'=>$exception->getMessage()]]);
                         } catch (\Throwable $ta) {
                             Log::channel('plugin.thb.rabbitmq.default')->info((string)$ta);
                         }
-                        call_user_func([$consumer, 'onConsumeFailure'], $exception, $package);
                     } catch (\Throwable $exception) {
                         $package['error'] = ['errMessage'=>$exception->getMessage(),'errCode'=>$exception->getCode(),'errFile'=>$exception->getFile(),'errLine'=>$exception->getLine()];
                         $package['type'] = 'rabbitmq';
