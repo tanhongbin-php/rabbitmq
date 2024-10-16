@@ -103,6 +103,22 @@ class RabbitmqClient
      */
     public function sendAsyn(string $queue = '', array $data = [], int $delay = 0, $attempts = 0) : bool
     {
+        $now = time();
+        //消息json
+        if($queue == 'rabbitmq_fail' && isset($data['data']) && isset($data['error'])){
+            $messageBody = json_encode($data);
+        }else{
+            $messageBody = json_encode([
+                'id'       => time().rand(),
+                'time'     => $now,
+                'delay'    => $delay,
+                'attempts' => $attempts,
+                'queue'    => $queue,
+                'data'     => $data,
+                'max_attempts' => $this->max_attempts,
+                'retry_seconds' => $this->retry_seconds,
+            ]);
+        }
         $queue = $this->prefix . $queue;
         if(!isset($this->queueArr[$queue])){
             // 声明延迟队列
@@ -113,19 +129,7 @@ class RabbitmqClient
 
             $this->queueArr[$queue] = $queue;
         }
-        $now = time();
-        $package_str = json_encode([
-            'id'       => time().rand(),
-            'time'     => $now,
-            'delay'    => $delay,
-            'attempts' => $attempts,
-            'queue'    => $queue,
-            'data'     => $data,
-            'max_attempts' => $this->max_attempts,
-            'retry_seconds' => $this->retry_seconds,
-        ]);
-        //消息json
-        $messageBody = $package_str;
+
         //消息持久化
         $message = new AMQPMessage($messageBody, ['delivery_mode' => 2]);
         //延迟消息
@@ -176,6 +180,27 @@ class RabbitmqClient
         });
         
         $this->channel->consume();
+    }
+
+    public function getMessageCount(string $queue) : int
+    {
+        $queue = $this->prefix . $queue;
+        $queue_declare_result = $this->channel->queue_declare($queue, false, true, false, false);
+        return $queue_declare_result[1];
+    }
+
+    public function getMessageData(string $queue) : string|bool
+    {
+        $queue = $this->prefix . $queue;
+        $this->channel->queue_declare($queue, false, true, false, false);
+        // 获取消息
+        $msg = $this->channel->basic_get($queue, true); // 第二个参数为false会获取但不删除消息，为true则获取并删除消息
+        if ($msg !== false) {
+            $message = $msg->body;
+            return $message;
+        } else {
+            return $msg;
+        }
     }
 
     public function close(){
