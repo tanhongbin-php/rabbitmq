@@ -41,6 +41,8 @@ class Consumer
 
     protected $reconnectDelay = 10;
 
+    protected $middlewaresArr = [];
+
     /**
      * StompConsumer constructor.
      * @param string $consumer_dir
@@ -72,34 +74,49 @@ class Consumer
                     return false;
                 }
                 $connection = Client::connection($connection_name);
-                $connection->consumer($queue, function(AMQPMessage $message) use ($connection, $queue, $consumer) {
+                $middleware = config('plugin.thb.rabbitmq.rabbitmq.' . $connection_name . '.middleware', []);
+                $selfMiddleware = $consumer->middleware ?? [];
+                $middlewares = array_merge($middleware, $selfMiddleware);
+                $connection->consumer($queue, function(AMQPMessage $message) use ($connection, $queue, $consumer, $middlewares) {
                     $package = json_decode($message->getBody(), true);
-                    Event::emit('queue.dbListen', $package);
                     try {
-                        $res = \call_user_func([$consumer, 'consume'], $package['data']);
-                        Event::emit('queue.log', ['type' => 'rabbitmq','queue_return' => $res]);
-                    } catch (BusinessException $e) {
-                        try {
-                            Event::emit('queue.log', ['type' => 'rabbitmq','queue_return' => ['code'=>$exception->getCode(),'msg'=>$exception->getMessage()]]);
-                        } catch (\Throwable $ta) {
-                            Log::channel('plugin.thb.rabbitmq.default')->info((string)$ta);
+                        // 使用示例
+                        $rabbitmqMidd = Container::get('Thb\Rabbitmq\Rabbitmqlication');
+
+                        foreach ($middlewares as $middleware) {
+                            if(!class_exists($middleware)){
+                                continue;
+                            }
+                            if (isset($this->middlewaresArr[$middleware])) {
+                                continue;
+                            }
+                            $this->middlewaresArr[$middleware] = $middleware; // 缓存中间件类实例，避免重复初始化
+                            $rabbitmqMidd ->use(new $middleware); // 添加中间件
                         }
+
+                        $rabbitmqMidd ->handle($package, function() use($consumer, $package) {
+                            try {
+                                return \call_user_func([$consumer, 'consume'], $package['data']);
+                            } catch (BusinessException $exception) {
+                                return ['code' => $exception->getCode(), 'msg' => $exception->getMessage()];
+                            } catch (\Throwable $exception) {
+                                $package['error'] = ['errMessage'=>$exception->getMessage(),'errCode'=>$exception->getCode(),'errFile'=>$exception->getFile(),'errLine'=>$exception->getLine()];
+                                Log::channel('plugin.thb.rabbitmq.default')->info((string)$ta);
+                                //重试超过最大次数,放入失败队列
+                                if($package['max_attempts'] == 0 || ($package['max_attempts'] > 0 && $package['attempts'] >= $package['max_attempts'])){
+                                    $connection->sendAsyn('rabbitmq_fail', $package);
+                                }else{
+                                    $package['attempts']++;
+                                    $dela = $package['attempts'] * $package['retry_seconds'];
+                                    $connection->sendAsyn($queue, $package['data'], $dela, $package['attempts']);
+                                }
+                                return ['code' => 500, 'msg' => ['errMessage'=>$exception->getMessage(), 'errCode'=>$exception->getCode(), 'errFile'=>$exception->getFile(), 'errLine'=>$exception->getLine()]];
+                            }
+                        });
                     } catch (\Throwable $exception) {
                         $package['error'] = ['errMessage'=>$exception->getMessage(),'errCode'=>$exception->getCode(),'errFile'=>$exception->getFile(),'errLine'=>$exception->getLine()];
-                        $package['type'] = 'rabbitmq';
-                        try {
-                            Event::emit('queue.exCep', $package);
-                        } catch (\Throwable $ta) {
-                            Log::channel('plugin.thb.rabbitmq.default')->info((string)$ta);
-                        }
-                        //重试超过最大次数,放入失败队列
-                        if($package['max_attempts'] == 0 || ($package['max_attempts'] > 0 && $package['attempts'] >= $package['max_attempts'])){
-                            $connection->sendAsyn('rabbitmq_fail', $package);
-                        }else{
-                            $package['attempts']++;
-                            $dela = $package['attempts'] * $package['retry_seconds'];
-                            $connection->sendAsyn($queue, $package['data'], $dela, $package['attempts']);
-                        }
+                        $connection->sendAsyn('rabbitmq_fail', $package);
+                        Log::channel('plugin.thb.rabbitmq.default')->info((string)$ta);
                     }
                     $message->ack();
                 });
