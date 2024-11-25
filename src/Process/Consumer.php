@@ -57,6 +57,12 @@ class Consumer
      */
     public function onWorkerStart()
     {
+        if(DIRECTORY_SEPARATOR === '/'){
+            pcntl_signal(SIGINT, function(){
+                Worker::stopAll();
+            });
+        }
+
         if (!file_exists($this->_consumerDir)) {
             echo "Consumer directory {$this->_consumerDir} not exists\r\n";
             return false;
@@ -116,7 +122,7 @@ class Consumer
                     } catch (\Throwable $exception) {
                         $package['error'] = ['errMessage'=>$exception->getMessage(),'errCode'=>$exception->getCode(),'errFile'=>$exception->getFile(),'errLine'=>$exception->getLine()];
                         $connection->sendAsyn('rabbitmq_fail', $package);
-                        Log::channel('plugin.thb.rabbitmq.default')->info((string)$ta);
+                        Log::channel('plugin.thb.rabbitmq.default')->info((string)$exception);
                     }
                     $message->ack();
                 });

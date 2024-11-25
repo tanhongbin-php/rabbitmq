@@ -29,7 +29,6 @@ class Client
      * @var Client[]
      */
     protected static $_connections = null;
-    protected static $_name = 'default';
 
 
     /**
@@ -45,7 +44,6 @@ class Client
             }
             $client = new RabbitmqClient($config, $name);
             static::$_connections[$name] = $client;
-            static::$_name = $name;
         }
         return static::$_connections[$name];
     }
@@ -62,46 +60,8 @@ class Client
     public static function send(string $queue = '', array $data = [], int $delay = 0, string $name = 'default') : bool
     {
         $config = config('plugin.thb.rabbitmq.rabbitmq', []);
-        $consumer = true;
-        $client = new RabbitmqClient($config, $name, $consumer);
-
-        $queue = $client->prefix . $queue;
-        if(!isset($client->queueArr[$queue])){
-            // 声明延迟队列
-            $client->channel->queue_declare($queue, false, true, false, false);
-
-            // 绑定队列到交换机
-            $client->channel->queue_bind($queue, 'delayed_exchange', $queue);
-
-            $client->queueArr[$queue] = $queue;
-        }
-        $now = time();
-        $package_str = json_encode([
-            'id'       => time().rand(),
-            'time'     => $now,
-            'delay'    => $delay,
-            'attempts' => $attempts,
-            'queue'    => $queue,
-            'data'     => $data,
-            'max_attempts' => $client->max_attempts,
-            'retry_seconds' => $client->retry_seconds,
-        ]);
-        //消息json
-        $messageBody = $package_str;
-        //消息持久化
-        $message = new AMQPMessage($messageBody, ['delivery_mode' => 2]);
-        //延迟消息
-        if($delay > 0){
-            $message->set('application_headers', new AMQPTable(['x-delay' => $delay * 1000]));
-        }
-        // 发布消息到交换机
-        $client->channel->basic_publish($message, 'delayed_exchange', $queue);
-
-        $client->channel->wait_for_pending_acks_returns(5);
-
-        $return = $client->return;
-
-        $client->return = false;
+        $client = new RabbitmqClient($config, $name);
+        $return = $client->sendAsyn($queue, $data, $delay);
         $client->close();
         return $return;
     }
@@ -114,14 +74,6 @@ class Client
      */
     public static function __callStatic($name, $arguments)
     {
-        try {
-            return static::connection('default')->{$name}(... $arguments);
-        } catch (\PhpAmqpLib\Exception\AMQPConnectionClosedException $exception) {
-            //连接超时
-            $config = config('plugin.thb.rabbitmq.rabbitmq', []);
-            $client = new RabbitmqClient($config, static::$_name);
-            static::$_connections[static::$_name] = $client;
-            return $client->{$name}(... $arguments);
-        }
+        return static::connection('default')->{$name}(... $arguments);
     }
 }

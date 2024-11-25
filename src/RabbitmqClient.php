@@ -12,23 +12,24 @@ namespace Thb\Rabbitmq;
 use PhpAmqpLib\Connection\AMQPStreamConnection;
 use PhpAmqpLib\Message\AMQPMessage;
 use PhpAmqpLib\Wire\AMQPTable;
-use Workerman\Timer;
-use Workerman\Worker;
 use support\Log;
 
 class RabbitmqClient
 {
+    protected $config = [];
+    protected $name;
     public $connection;
     public $channel;
-    public $queueArr = [];
     public $return = false;
     public $prefix = '';
     public $max_attempts = 0;
     public $retry_seconds = 5;
-    public function __construct($config, $name){
-        static $timer;
+    public function __construct(array $config, string $name){
+        $this->config = $config;
+
+        $this->name = $name;
         //初始化
-        $this->connect($config, $name);
+        $this->connect();
         //前缀
         $this->prefix = $config[$name]['options']['prefix'] ?? '';
         //最大重试次数
@@ -42,12 +43,12 @@ class RabbitmqClient
      * @Datetime: 2024/09/06
      * @Username: thb
      */
-    public function connect($config, $name){
-        $host = $config[$name]['host'];
-        $port = $config[$name]['port'];
-        $user = $config[$name]['user'];
-        $password = $config[$name]['password'];
-        $vhost = $config[$name]['vhost'];
+    protected function connect(){
+        $host = $this->config[$this->name]['host'];
+        $port = $this->config[$this->name]['port'];
+        $user = $this->config[$this->name]['user'];
+        $password = $this->config[$this->name]['password'];
+        $vhost = $this->config[$this->name]['vhost'];
         $this->connection = new AMQPStreamConnection(
             $host,
             $port,
@@ -77,16 +78,10 @@ class RabbitmqClient
         $this->channel->confirm_select();//open confirm
         //ack callback function
         $this->channel->set_ack_handler(function (AMQPMessage $message){
-            if(strpos($message->getRoutingKey(), 'heartbeat_queue_') !== false){
-                return false;
-            }
             $this->return = true;
         });
         //nack callback function
         $this->channel->set_nack_handler(function (AMQPMessage $message){
-            if(strpos($message->getRoutingKey(), 'heartbeat_queue_') !== false){
-                return false;
-            }
             $this->return = false;
             Log::channel('plugin.thb.rabbitmq.rabbitmq_queue_error')->info($message->getRoutingKey(),[$message->getBody()]);
         });
@@ -120,32 +115,42 @@ class RabbitmqClient
             ]);
         }
         $queue = $this->prefix . $queue;
-        if(!isset($this->queueArr[$queue])){
-            // 声明延迟队列
-            $this->channel->queue_declare($queue, false, true, false, false);
 
-            // 绑定队列到交换机
-            $this->channel->queue_bind($queue, 'delayed_exchange', $queue);
+        $num = 2;//断线重试次数
 
-            $this->queueArr[$queue] = $queue;
+        for($i = 0; $i <= $num; $i++){
+            try{
+                // 声明延迟队列
+                $this->channel->queue_declare($queue, false, true, false, false);
+
+                // 绑定队列到交换机
+                $this->channel->queue_bind($queue, 'delayed_exchange', $queue);
+
+                //消息持久化
+                $message = new AMQPMessage($messageBody, ['delivery_mode' => 2]);
+                //延迟消息
+                if($delay > 0){
+                    $message->set('application_headers', new AMQPTable(['x-delay' => $delay * 1000]));
+                }
+                // 发布消息到交换机
+                $this->channel->basic_publish($message, 'delayed_exchange', $queue);
+
+                $this->channel->wait_for_pending_acks_returns(5);
+
+                $return = $this->return;
+
+                $this->return = false;
+
+                return $return;
+            } catch (\Throwable $exception) {
+                if($i < $num){
+                    $this->connect();
+                }
+                $i++;
+                continue;
+            }
         }
-
-        //消息持久化
-        $message = new AMQPMessage($messageBody, ['delivery_mode' => 2]);
-        //延迟消息
-        if($delay > 0){
-            $message->set('application_headers', new AMQPTable(['x-delay' => $delay * 1000]));
-        }
-        // 发布消息到交换机
-        $this->channel->basic_publish($message, 'delayed_exchange', $queue);
-
-        $this->channel->wait_for_pending_acks_returns(5);
-
-        $return = $this->return;
-
-        $this->return = false;
-
-        return $return;
+        throw new \PhpAmqpLib\Exception\AMQPConnectionClosedException('Channel connection is closed.', 500);
     }
     /**
      * 消费
@@ -178,7 +183,7 @@ class RabbitmqClient
         register_shutdown_function(function(){
             $this->close();
         });
-        
+
         $this->channel->consume();
     }
 
