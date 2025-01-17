@@ -83,7 +83,7 @@ class RabbitmqClient
         //nack callback function
         $this->channel->set_nack_handler(function (AMQPMessage $message){
             $this->return = false;
-            Log::channel('plugin.thb.rabbitmq.rabbitmq_queue_error')->info($message->getRoutingKey(),[$message->getBody()]);
+            Log::channel('default')->info($message->getRoutingKey(),[$message->getBody()]);
         });
     }
 

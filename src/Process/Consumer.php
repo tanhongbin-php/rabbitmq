@@ -103,20 +103,8 @@ class Consumer
                         $rabbitmqMidd ->handle($package, function() use($consumer, $package) {
                             try {
                                 return \call_user_func([$consumer, 'consume'], $package['data']);
-                            } catch (BusinessException $exception) {
-                                return ['code' => $exception->getCode(), 'msg' => $exception->getMessage()];
                             } catch (\Throwable $exception) {
-                                $package['error'] = ['errMessage'=>$exception->getMessage(),'errCode'=>$exception->getCode(),'errFile'=>$exception->getFile(),'errLine'=>$exception->getLine()];
-                                Log::channel('plugin.thb.rabbitmq.default')->info((string)$ta);
-                                //重试超过最大次数,放入失败队列
-                                if($package['max_attempts'] == 0 || ($package['max_attempts'] > 0 && $package['attempts'] >= $package['max_attempts'])){
-                                    $connection->sendAsyn('rabbitmq_fail', $package);
-                                }else{
-                                    $package['attempts']++;
-                                    $dela = $package['attempts'] * $package['retry_seconds'];
-                                    $connection->sendAsyn($queue, $package['data'], $dela, $package['attempts']);
-                                }
-                                return ['code' => 500, 'msg' => ['errMessage'=>$exception->getMessage(), 'errCode'=>$exception->getCode(), 'errFile'=>$exception->getFile(), 'errLine'=>$exception->getLine()]];
+                                return $exception;
                             }
                         });
                     } catch (\Throwable $exception) {
