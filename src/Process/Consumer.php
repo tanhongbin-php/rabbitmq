@@ -20,7 +20,6 @@ use support\Container;
 use support\exception\BusinessException;
 use support\Log;
 use Thb\Rabbitmq\Client;
-use Webman\Event\Event;
 use Workerman\Worker;
 
 /**
@@ -103,7 +102,18 @@ class Consumer
                         $rabbitmqMidd ->handle($package, function() use($consumer, $package) {
                             try {
                                 return \call_user_func([$consumer, 'consume'], $package['data']);
-                            } catch (\Throwable $exception) {
+                            } catch (BusinessException $exception) {
+                                return $exception;
+                            }  catch (\Throwable $exception) {
+                                $package['error'] = ['errMessage'=>$exception->getMessage(),'errCode'=>$exception->getCode(),'errFile'=>$exception->getFile(),'errLine'=>$exception->getLine()];
+                                //重试超过最大次数,放入失败队列
+                                if($package['max_attempts'] == 0 || ($package['max_attempts'] > 0 && $package['attempts'] >= $package['max_attempts'])){
+                                    $connection->sendAsyn('rabbitmq_fail', $package);
+                                }else{
+                                    $package['attempts']++;
+                                    $dela = $package['attempts'] * $package['retry_seconds'];
+                                    $connection->sendAsyn($queue, $package['data'], $dela, $package['attempts']);
+                                }
                                 return $exception;
                             }
                         });

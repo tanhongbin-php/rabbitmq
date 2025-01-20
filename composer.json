@@ -5,8 +5,7 @@
   "description": "Webman plugin thb/rabbitmq",
   "require": {
     "php": ">=7.2",
-    "php-amqplib/php-amqplib": "^3.7",
-    "webman/event": "^1.0"
+    "php-amqplib/php-amqplib": "^3.7"
   },
   "autoload": {
     "psr-4": {
