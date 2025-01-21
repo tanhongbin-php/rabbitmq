@@ -40,15 +40,18 @@ class Consumer
 
     protected $reconnectDelay = 10;
 
-    protected $middlewaresArr = [];
+    protected $_middleware = [];
+
+    protected $enable = false;
 
     /**
      * StompConsumer constructor.
      * @param string $consumer_dir
      */
-    public function __construct($consumer_dir = '')
+    public function __construct($consumer_dir = '', $middleware = [])
     {
         $this->_consumerDir = $consumer_dir;
+        $this->_middleware = $middleware;
     }
 
     /**
@@ -80,25 +83,25 @@ class Consumer
                 }
                 $connection = Client::connection($connection_name);
                 $middleware = config('plugin.thb.rabbitmq.rabbitmq.' . $connection_name . '.middleware', []);
-                $selfMiddleware = $consumer->middleware ?? [];
-                $middlewares = array_merge($middleware, $selfMiddleware);
+                $middlewares = array_merge($middleware, $this->_middleware);
                 $connection->consumer($queue, function(AMQPMessage $message) use ($connection, $queue, $consumer, $middlewares) {
                     $package = json_decode($message->getBody(), true);
                     try {
                         // 使用示例
                         $rabbitmqMidd = Container::get('Thb\Rabbitmq\Rabbitmqlication');
-
-                        foreach ($middlewares as $middleware) {
-                            if(!class_exists($middleware)){
-                                continue;
+                        if(!$this->enable){
+                            $this->enable = true;
+                            foreach ($middlewares as $middleware) {
+                                if(is_string($middleware) && !class_exists($middleware)){
+                                    continue;
+                                }
+                                if(is_string($middleware)){
+                                    $rabbitmqMidd->use(new $middleware); // 添加中间件
+                                }else{
+                                    $rabbitmqMidd->use($middleware); // 添加中间件
+                                }
                             }
-                            if (isset($this->middlewaresArr[$middleware])) {
-                                continue;
-                            }
-                            $this->middlewaresArr[$middleware] = $middleware; // 缓存中间件类实例，避免重复初始化
-                            $rabbitmqMidd ->use(new $middleware); // 添加中间件
                         }
-
                         $rabbitmqMidd ->handle($package, function() use($consumer, $package) {
                             try {
                                 return \call_user_func([$consumer, 'consume'], $package['data']);
