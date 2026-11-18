@@ -5,7 +5,7 @@ return [
             [
                 'class' => Monolog\Handler\RotatingFileHandler::class,
                 'constructor' => [
-                    runtime_path() . '/logs/thb-rabbitmq/queue.log',
+                    runtime_path() . '/logs/rabbitmq/queue.log',
                     7,
                     Monolog\Logger::DEBUG,
                 ],
