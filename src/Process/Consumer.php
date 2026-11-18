@@ -39,15 +39,24 @@ class Consumer
         $dirIterator = new \RecursiveDirectoryIterator($this->consumerDir);
         $iterator = new \RecursiveIteratorIterator($dirIterator);
         foreach ($iterator as $file) {
-            if (is_dir($file)) {
+            /** @var \SplFileInfo $file */
+            if ($file->isDir()) {
                 continue;
             }
-            $fileinfo = new \SplFileInfo($file);
-            if ($fileinfo->getExtension() !== 'php') {
+            if ($file->getExtension() !== 'php') {
                 continue;
             }
-            $class = str_replace('/', '\\', substr(substr((string)$file, strlen(base_path())), 0, -4));
-            if (!is_a($class, BaseConsumer::class, true) || (new \ReflectionClass($class))->isAbstract()) {
+            // Windows 下统一路径分隔符，避免类名解析失败
+            $base = rtrim(str_replace('\\', '/', base_path()), '/');
+            $path = str_replace('\\', '/', $file->getPathname());
+            if (!str_starts_with($path, $base . '/')) {
+                continue;
+            }
+            $class = str_replace('/', '\\', substr($path, strlen($base) + 1, -4));
+            if ($class === '' || !class_exists($class) || !is_a($class, BaseConsumer::class, true)) {
+                continue;
+            }
+            if ((new \ReflectionClass($class))->isAbstract()) {
                 continue;
             }
             /** @var BaseConsumer $consumer */
