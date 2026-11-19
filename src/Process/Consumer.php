@@ -8,6 +8,7 @@ use Bunny\Channel;
 use Bunny\Message;
 use support\Container;
 use support\Context;
+use support\Log;
 use Thb\Rabbitmq\Consumer as BaseConsumer;
 use Workerman\RabbitMQ\Client;
 
@@ -106,17 +107,22 @@ class Consumer
         $channel->qos(0, $this->prefetch);
         foreach ($queueMap as $fullQueue => $consumer) {
             $channel->queueDeclare($fullQueue, false, true, false, false, false, []);
-            $channel->consume(function (Message $message, Channel $channel, AbstractClient $client) use ($consumer) {
+            $channel->consume(function (Message $message, Channel $channel, AbstractClient $client) use ($consumer, $fullQueue) {
                 try {
                     $data = json_decode($message->content, true);
                     $consumer->consume($data);
                     $channel->ack($message);
                 } catch (\Throwable $e) {
-                    try {
-                        $channel->nack($message, false, true);
-                    } catch (\Throwable $ee) {
-                    }
-                    throw $e;
+                    Log::channel('plugin.thb.rabbitmq.default')->error($e->getMessage(), [
+                        'queue' => $fullQueue,
+                        'consumer' => $consumer::class,
+                        'code' => $e->getCode(),
+                        'file' => $e->getFile(),
+                        'line' => $e->getLine(),
+                        'trace' => $e->getTraceAsString(),
+                        'body' => $message->content,
+                    ]);
+                    $channel->ack($message);
                 } finally {
                     Context::destroy();
                 }
