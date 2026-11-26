@@ -21,6 +21,12 @@ class Client
     /** @var array<string, mixed> */
     protected static array $channels = [];
 
+    /**
+     * 进程内已声明队列缓存：connection => [cacheKey => true]
+     * @var array<string, array<string, true>>
+     */
+    protected static array $declared = [];
+
     protected string $connection;
 
     public function __construct(string $connection = 'default')
@@ -74,10 +80,10 @@ class Client
                     $targetQueue = 'retry_delayed_' . $queueName;
                     $headers['expiration'] = (string)($delay * 1000);
                     // 确保死信目标队列存在
-                    $channel->queueDeclare($queueName, false, true, false, false, false, []);
+                    $this->ensureQueue($channel, $queueName, []);
                 }
 
-                $channel->queueDeclare($targetQueue, false, true, false, false, false, $queueArguments);
+                $this->ensureQueue($channel, $targetQueue, $queueArguments);
                 $res = $channel->publish($payload, $headers, '', $targetQueue);
                 return (bool)$res;
             } catch (\Throwable $e) {
@@ -86,6 +92,23 @@ class Client
             }
         }
         return false;
+    }
+
+    /**
+     * 进程内缓存 queueDeclare，同连接同参数只声明一次
+     *
+     * @param mixed $channel
+     * @param array<string, mixed> $arguments
+     */
+    protected function ensureQueue($channel, string $queue, array $arguments = []): void
+    {
+        $name = $this->connection;
+        $cacheKey = $queue . "\0" . md5(serialize($arguments));
+        if (!empty(static::$declared[$name][$cacheKey])) {
+            return;
+        }
+        $channel->queueDeclare($queue, false, true, false, false, false, $arguments);
+        static::$declared[$name][$cacheKey] = true;
     }
 
     protected function channel()
@@ -121,5 +144,7 @@ class Client
         }
         static::$channels[$name] = null;
         static::$clients[$name] = null;
+        // channel 重建后需重新 declare
+        unset(static::$declared[$name]);
     }
 }
