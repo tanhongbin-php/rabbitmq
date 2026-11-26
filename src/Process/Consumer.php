@@ -5,15 +5,15 @@ namespace Thb\Rabbitmq\Process;
 
 use Bunny\AbstractClient;
 use Bunny\Channel;
+use Bunny\Client as BunnyClient;
 use Bunny\Message;
 use support\Container;
 use support\Context;
 use support\Log;
 use Thb\Rabbitmq\Consumer as BaseConsumer;
-use Workerman\RabbitMQ\Client;
 
 /**
- * 扫描消费者目录，订阅 RabbitMQ 队列
+ * 扫描消费者目录，订阅 RabbitMQ 队列（同步阻塞：prefetch=1，处理完再取下一条）
  * 消费者类须继承 Thb\Rabbitmq\Consumer 并实现 consume
  */
 class Consumer
@@ -24,8 +24,7 @@ class Consumer
     protected string $connectionFilter = '';
 
     /**
-     * 通道 prefetch：限制单进程未 ack 并发数，避免 Fiber 下打满 DB/Redis 连接池
-     * 默认 1（经典工作队列：处理完再取下一条）；需要有限并发时可调大，且应 <= 连接池 max_connections
+     * 通道 prefetch：默认 1 = 经典工作队列，处理完并 ack 后再投递下一条
      */
     protected int $prefetch = 1;
 
@@ -101,9 +100,9 @@ class Consumer
             return;
         }
 
-        $client = Client::factory($config)->connect();
+        // 同步 Bunny：consume 回调跑完才回到 run() 读下一帧；配合 prefetch=1 严格串行
+        $client = (new BunnyClient($config))->connect();
         $channel = $client->channel();
-        // Fiber 协程下若不限流，会并发进 consume，轻易耗尽 DB 连接池
         $channel->qos(0, $this->prefetch);
         foreach ($queueMap as $fullQueue => $consumer) {
             $channel->queueDeclare($fullQueue, false, true, false, false, false, []);
