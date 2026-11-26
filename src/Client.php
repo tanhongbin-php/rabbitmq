@@ -3,10 +3,10 @@ declare(strict_types=1);
 
 namespace Thb\Rabbitmq;
 
-use Workerman\RabbitMQ\Client as RabbitClient;
+use Bunny\Client as BunnyClient;
 
 /**
- * RabbitMQ 入队客户端
+ * RabbitMQ 入队客户端（同步 Bunny，避免 CoroutineClient 写缓冲 sleep）
  *
  * 用法：
  *   Client::send('fast_queue', ['id' => 1]);
@@ -15,7 +15,7 @@ use Workerman\RabbitMQ\Client as RabbitClient;
  */
 class Client
 {
-    /** @var array<string, RabbitClient|null> */
+    /** @var array<string, BunnyClient|null> */
     protected static array $clients = [];
 
     /** @var array<string, mixed> */
@@ -119,7 +119,8 @@ class Client
             if ($config === []) {
                 throw new \RuntimeException("RabbitMQ connection [{$name}] not found");
             }
-            static::$clients[$name] = RabbitClient::factory($config)->connect();
+            // 入队用同步 Bunny：无 Timer::sleep，本地 broker 通常亚毫秒～几毫秒
+            static::$clients[$name] = (new BunnyClient($config))->connect();
         }
         if (empty(static::$channels[$name])) {
             static::$channels[$name] = static::$clients[$name]->channel();
